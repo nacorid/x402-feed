@@ -1,0 +1,47 @@
+[Unit]
+Description=x402-feed Bluesky Feed Generator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+
+# Keep working directory so .env is found
+WorkingDirectory=/home/ubuntu/gitSources/x402-feed
+ExecStart=/home/ubuntu/gitSources/x402-feed/x402-feed
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=15s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=x402-feed
+
+# -----------------------
+# Hardened but compatible
+# -----------------------
+NoNewPrivileges=true
+ProtectHome=false           # must be false because binary is in /home
+ProtectSystem=full          # /usr and /etc readonly, your dir writable
+ReadWritePaths=/home/ubuntu/gitSources/x402-feed
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @network-io
+MemoryDenyWriteExecute=true
+LockPersonality=true
+RestrictNamespaces=false
+LimitCORE=0
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

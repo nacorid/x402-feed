@@ -1,0 +1,6 @@
+# Environment file
+.env
+# Database file
+*.db
+# Binary file
+x402-feed
