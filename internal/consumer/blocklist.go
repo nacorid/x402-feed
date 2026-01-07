@@ -75,7 +75,7 @@ func (b *Blocklist) startBackgroundUpdater(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			fetchCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			if err := b.refreshList(fetchCtx); err != nil {
 				slog.Default().InfoContext(ctx, "Error refreshing blocklist", "error", err)
 			}

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"log/slog"
 	"net/http"
