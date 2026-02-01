@@ -3,7 +3,7 @@ package consumer
 import (
 	"context"
 	"encoding/json"
-	"strings"
+	"regexp"
 
 	"fmt"
 	"log/slog"
@@ -88,6 +88,9 @@ func (h *Handler) HandleEvent(ctx context.Context, event *models.Event) error {
 	}
 }
 
+// The `(?i)` flag makes it case-insensitive
+var x402Regex = regexp.MustCompile(`(?i)\bx402\b`)
+
 func (h *Handler) handleCreateEvent(_ context.Context, event *models.Event) error {
 	if event.Commit.Collection != "app.bsky.feed.post" {
 		return nil
@@ -101,7 +104,10 @@ func (h *Handler) handleCreateEvent(_ context.Context, event *models.Event) erro
 
 	// this is where logic goes for what posts you wish to store for a feed but for this example
 	// just look for any post that contains the #golang hashtag
-	if !strings.Contains(strings.ToLower(bskyPost.Text), "x402") {
+	/*if !strings.Contains(strings.ToLower(bskyPost.Text), "x402") {
+		return nil
+	}*/
+	if !x402Regex.MatchString(bskyPost.Text) {
 		return nil
 	}
 
