@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,10 @@ type Blocklist struct {
 	client  *xrpc.Client
 	listURI string
 
+	handle   string
+	password string
+	host     string
+
 	blocked map[string]struct{}
 	mu      sync.RWMutex
 }
@@ -25,27 +30,20 @@ func NewBlocklist(ctx context.Context, handle, password, host, listKey string) (
 		Host: host,
 	}
 
-	session, err := atproto.ServerCreateSession(ctx, client, &atproto.ServerCreateSession_Input{
-		Identifier: handle,
-		Password:   password,
-	})
+	err := newAuth(ctx, client, handle, password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bluesky session: %w", err)
+		return nil, err
 	}
 
-	client.Auth = &xrpc.AuthInfo{
-		AccessJwt:  session.AccessJwt,
-		RefreshJwt: session.RefreshJwt,
-		Handle:     session.Handle,
-		Did:        session.Did,
-	}
-
-	fullListURI := fmt.Sprintf("at://%s/app.bsky.graph.list/%s", session.Did, listKey)
+	fullListURI := fmt.Sprintf("at://%s/app.bsky.graph.list/%s", client.Auth.Did, listKey)
 
 	b := &Blocklist{
-		client:  client,
-		listURI: fullListURI,
-		blocked: make(map[string]struct{}),
+		client:   client,
+		handle:   handle,
+		password: password,
+		host:     host,
+		listURI:  fullListURI,
+		blocked:  make(map[string]struct{}),
 	}
 
 	slog.Default().InfoContext(ctx, "Initial blocklist fetch...")
@@ -57,6 +55,23 @@ func NewBlocklist(ctx context.Context, handle, password, host, listKey string) (
 	go b.startBackgroundUpdater(ctx)
 
 	return b, nil
+}
+
+func newAuth(ctx context.Context, client *xrpc.Client, handle string, password string) error {
+	session, err := atproto.ServerCreateSession(ctx, client, &atproto.ServerCreateSession_Input{
+		Identifier: handle,
+		Password:   password,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create bluesky session: %w", err)
+	}
+	client.Auth = &xrpc.AuthInfo{
+		AccessJwt:  session.AccessJwt,
+		RefreshJwt: session.RefreshJwt,
+		Handle:     session.Handle,
+		Did:        session.Did,
+	}
+	return nil
 }
 
 func (b *Blocklist) Contains(did string) bool {
@@ -77,11 +92,26 @@ func (b *Blocklist) startBackgroundUpdater(ctx context.Context) {
 		case <-ticker.C:
 			fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			if err := b.refreshList(fetchCtx); err != nil {
-				slog.Default().InfoContext(ctx, "Error refreshing blocklist", "error", err)
+				if strings.Contains(err.Error(), "ExpiredToken") {
+					b.refreshSession(fetchCtx)
+					if err := b.refreshList(fetchCtx); err != nil {
+						slog.Default().ErrorContext(fetchCtx, "Error refreshing blocklist after session refresh", "error", err)
+					}
+				}
+				slog.Default().ErrorContext(ctx, "Error refreshing blocklist", "error", err)
 			}
 			cancel()
 		}
 	}
+}
+
+func (b *Blocklist) refreshSession(ctx context.Context) error {
+	slog.Default().InfoContext(ctx, "Refreshing session...")
+	if err := newAuth(ctx, b.client, b.handle, b.password); err != nil {
+		slog.Default().ErrorContext(ctx, "Failed to refresh session", "error", err)
+		return err
+	}
+	return nil
 }
 
 func (b *Blocklist) refreshList(ctx context.Context) error {
