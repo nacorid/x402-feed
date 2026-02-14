@@ -81,6 +81,17 @@ func (b *Blocklist) Contains(did string) bool {
 	return exists
 }
 
+func (b *Blocklist) GetAll() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	dids := make([]string, 0, len(b.blocked))
+	for did := range b.blocked {
+		dids = append(dids, did)
+	}
+	return dids
+}
+
 func (b *Blocklist) startBackgroundUpdater(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()

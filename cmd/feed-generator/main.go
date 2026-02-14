@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path"
 	"syscall"
+	"time"
 
 	"github.com/nacorid/x402-feed/internal/consumer"
 	db "github.com/nacorid/x402-feed/internal/database"
@@ -105,6 +106,23 @@ func run() error {
 
 func consumeLoop(ctx context.Context, database *db.Database, blocklist *consumer.Blocklist) {
 	handler := consumer.NewFeedHandler(database, blocklist)
+
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				err := handler.DeleteBlockedPosts(ctx)
+				if err != nil {
+					slog.Error("delete blocked posts", "error", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	jsServerAddr := os.Getenv("JS_SERVER_ADDR")
 	if jsServerAddr == "" {

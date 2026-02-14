@@ -73,6 +73,19 @@ func NewFeedHandler(store server.PostStore, blocklist *Blocklist) *Handler {
 	return &Handler{store: store, blocklist: blocklist}
 }
 
+func (h *Handler) DeleteBlockedPosts(ctx context.Context) error {
+	if h.blocklist == nil {
+		return nil
+	}
+
+	blockedDIDs := h.blocklist.GetAll()
+	if len(blockedDIDs) == 0 {
+		return nil
+	}
+
+	return h.store.DeletePostsFromURIs(blockedDIDs)
+}
+
 // HandleEvent will handle an event based on the event's commit operation
 func (h *Handler) HandleEvent(ctx context.Context, event *models.Event) error {
 	if event.Commit == nil {

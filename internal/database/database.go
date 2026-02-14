@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	_ "github.com/glebarez/go-sqlite"
 
@@ -124,4 +125,18 @@ func (d *Database) GetFeedPosts(cursor, limit int) ([]server.Post, error) {
 	}
 
 	return posts, nil
+}
+
+func (d *Database) DeletePostsFromURIs(uris []string) error {
+	sql := `DELETE FROM posts WHERE postURI IN (?` + strings.Repeat(",?", len(uris)-1) + `);`
+	args := make([]interface{}, len(uris))
+	for i, uri := range uris {
+		args[i] = uri
+	}
+
+	_, err := d.db.Exec(sql, args...)
+	if err != nil {
+		return fmt.Errorf("exec delete posts: %w", err)
+	}
+	return nil
 }

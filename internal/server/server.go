@@ -20,6 +20,7 @@ type Post struct {
 type PostStore interface {
 	GetFeedPosts(cursor, limit int) ([]Post, error)
 	CreatePost(post Post) error
+	DeletePostsFromURIs(uris []string) error
 }
 
 // Server is the feed server that will be called when a user requests to view a feed
