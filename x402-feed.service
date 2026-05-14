@@ -27,8 +27,8 @@ SyslogIdentifier=x402-feed
 # Hardened but compatible
 # -----------------------
 NoNewPrivileges=true
-ProtectHome=false           # must be false because binary is in /home
-ProtectSystem=full          # /usr and /etc readonly, your dir writable
+ProtectHome=false
+ProtectSystem=full
 ReadWritePaths=/home/ubuntu/gitSources/x402-feed
 PrivateTmp=true
 PrivateDevices=true
