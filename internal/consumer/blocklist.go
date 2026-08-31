@@ -58,6 +58,8 @@ func NewBlocklist(ctx context.Context, handle, password, host, listKey string) (
 }
 
 func newAuth(ctx context.Context, client *xrpc.Client, handle string, password string) error {
+	client.Auth = nil
+
 	session, err := atproto.ServerCreateSession(ctx, client, &atproto.ServerCreateSession_Input{
 		Identifier: handle,
 		Password:   password,
@@ -104,9 +106,15 @@ func (b *Blocklist) startBackgroundUpdater(ctx context.Context) {
 			fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			if err := b.refreshList(fetchCtx); err != nil {
 				if strings.Contains(err.Error(), "ExpiredToken") {
-					b.refreshSession(fetchCtx)
+					if err := b.refreshSession(fetchCtx); err != nil {
+						slog.Default().ErrorContext(fetchCtx, "Failed to refresh session", "error", err)
+						cancel()
+						continue
+					}
 					if err := b.refreshList(fetchCtx); err != nil {
 						slog.Default().ErrorContext(fetchCtx, "Error refreshing blocklist after session refresh", "error", err)
+						cancel()
+						continue
 					}
 				}
 				slog.Default().ErrorContext(ctx, "Error refreshing blocklist", "error", err)
