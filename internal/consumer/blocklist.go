@@ -116,6 +116,9 @@ func (b *Blocklist) startBackgroundUpdater(ctx context.Context) {
 						cancel()
 						continue
 					}
+					slog.Default().InfoContext(fetchCtx, "Blocklist refreshed after session refresh", "blockedCount", len(b.GetAll()))
+					cancel()
+					continue
 				}
 				slog.Default().ErrorContext(ctx, "Error refreshing blocklist", "error", err)
 			}

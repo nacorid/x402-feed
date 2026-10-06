@@ -16,7 +16,6 @@ import (
 	db "github.com/nacorid/x402-feed/internal/database"
 	srv "github.com/nacorid/x402-feed/internal/server"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/joho/godotenv"
 )
 
@@ -129,20 +128,35 @@ func consumeLoop(ctx context.Context, database *db.Database, blocklist *consumer
 		jsServerAddr = defaultJetstreamAddr
 	}
 
-	consumer := consumer.NewJetstreamConsumer(jsServerAddr, slog.Default(), handler)
+	jsConsumer := consumer.NewJetstreamConsumer(jsServerAddr, slog.Default(), handler)
 
-	_ = retry.Do(func() error {
-		err := consumer.Consume(ctx)
+	const reconnectDelay = 5 * time.Second
+	done := false
+	for {
+		err := jsConsumer.Consume(ctx)
 		if err != nil {
-			// if the context has been cancelled then it's time to exit
-			if errors.Is(err, context.Canceled) {
-				return nil
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				break
 			}
 			slog.Error("consume loop", "error", err)
-			return err
+		} else {
+			slog.Warn("consume returned without error, reconnecting")
+			if ctx.Err() != nil {
+				break
+			}
 		}
-		return nil
-	}, retry.Attempts(0)) // retry indefinitly until context canceled
+		select {
+		case <-ctx.Done():
+			done = true
+		case <-time.After(reconnectDelay):
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		if done {
+			break
+		}
+	}
 
 	slog.Warn("exiting consume loop")
 }

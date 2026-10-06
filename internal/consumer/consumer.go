@@ -52,8 +52,9 @@ func (c *JetstreamConsumer) Consume(ctx context.Context) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	cursor := time.Now().Add(1 * -time.Minute).UnixMicro()
+	cursor := time.Now().Add(-5 * time.Minute).UnixMicro()
 
+	c.logger.Info("starting jetstream consume", "cursor", cursor)
 	if err := client.ConnectAndRead(ctx, &cursor); err != nil {
 		return fmt.Errorf("connect and read: %w", err)
 	}
@@ -83,7 +84,11 @@ func (h *Handler) DeleteBlockedPosts(ctx context.Context) error {
 		return nil
 	}
 
-	return h.store.DeletePostsFromURIs(blockedDIDs)
+	if err := h.store.DeletePostsFromDIDs(blockedDIDs); err != nil {
+		return err
+	}
+	slog.Info("deleted blocked posts", "blockedCount", len(blockedDIDs))
+	return nil
 }
 
 // HandleEvent will handle an event based on the event's commit operation
@@ -138,12 +143,14 @@ func (h *Handler) handleCreateEvent(_ context.Context, event *models.Event) erro
 	post := server.Post{
 		RKey:      event.Commit.RKey,
 		PostURI:   postURI,
+		UserDID:   event.Did,
 		CreatedAt: createdAt.UnixMilli(),
 	}
 	err = h.store.CreatePost(post)
 	if err != nil {
-		slog.Error("error creating post in store", "error", err)
+		slog.Error("error creating post in store", "error", err, "uri", postURI)
 		return nil
 	}
+	slog.Info("stored post", "uri", postURI)
 	return nil
 }

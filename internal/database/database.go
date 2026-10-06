@@ -74,6 +74,7 @@ func createPostsTable(db *sql.DB) error {
 		"id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
 		"postRKey" TEXT,
 		"postURI" TEXT,
+		"userDID" TEXT NOT NULL DEFAULT '',
 		"createdAt" integer NOT NULL,
 		UNIQUE(postRKey)
 	  );`
@@ -87,15 +88,50 @@ func createPostsTable(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("exec sql statement to create posts table: %w", err)
 	}
+	_ = statement.Close()
 	slog.Info("posts table created")
 
+	// Migration for DBs created before userDID existed.
+	if err := ensureUserDIDColumn(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureUserDIDColumn(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(posts);`)
+	if err != nil {
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan pragma: %w", err)
+		}
+		if name == "userDID" {
+			return nil
+		}
+	}
+	if rows.Err() != nil {
+		return fmt.Errorf("iterate pragma rows: %w", rows.Err())
+	}
+	if _, err := db.Exec(`ALTER TABLE posts ADD COLUMN userDID TEXT NOT NULL DEFAULT '';`); err != nil {
+		return fmt.Errorf("add userDID column: %w", err)
+	}
 	return nil
 }
 
 // CreatePost will insert a post into a database
 func (d *Database) CreatePost(post server.Post) error {
-	sql := `INSERT INTO posts (postRKey, postURI, createdAt) VALUES (?, ?, ?) ON CONFLICT(postRKey) DO NOTHING;`
-	_, err := d.db.Exec(sql, post.RKey, post.PostURI, post.CreatedAt)
+	sql := `INSERT INTO posts (postRKey, postURI, userDID, createdAt) VALUES (?, ?, ?, ?) ON CONFLICT(postRKey) DO NOTHING;`
+	_, err := d.db.Exec(sql, post.RKey, post.PostURI, post.UserDID, post.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("exec insert post: %w", err)
 	}
@@ -123,15 +159,21 @@ func (d *Database) GetFeedPosts(cursor, limit int) ([]server.Post, error) {
 		}
 		posts = append(posts, post)
 	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("iterate rows: %w", rows.Err())
+	}
 
 	return posts, nil
 }
 
-func (d *Database) DeletePostsFromURIs(uris []string) error {
-	sql := `DELETE FROM posts WHERE postURI IN (?` + strings.Repeat(",?", len(uris)-1) + `);`
-	args := make([]interface{}, len(uris))
-	for i, uri := range uris {
-		args[i] = uri
+func (d *Database) DeletePostsFromDIDs(dids []string) error {
+	if len(dids) == 0 {
+		return nil
+	}
+	sql := `DELETE FROM posts WHERE userDID IN (?` + strings.Repeat(",?", len(dids)-1) + `);`
+	args := make([]interface{}, len(dids))
+	for i, did := range dids {
+		args[i] = did
 	}
 
 	_, err := d.db.Exec(sql, args...)

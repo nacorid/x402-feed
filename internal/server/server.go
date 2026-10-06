@@ -20,7 +20,7 @@ type Post struct {
 type PostStore interface {
 	GetFeedPosts(cursor, limit int) ([]Post, error)
 	CreatePost(post Post) error
-	DeletePostsFromURIs(uris []string) error
+	DeletePostsFromDIDs(dids []string) error
 }
 
 // Server is the feed server that will be called when a user requests to view a feed
@@ -44,6 +44,7 @@ func NewServer(port int, feedHost, feedName string, postStore PostStore) (*Serve
 	mux.HandleFunc("/xrpc/app.bsky.feed.describeFeedGenerator", srv.HandleDescribeFeedGenerator)
 	mux.HandleFunc("POST /xrpc/app.bsky.feed.sendInteractions", srv.HandleFeedInteractions)
 	mux.HandleFunc("/.well-known/did.json", srv.HandleWellKnown)
+	mux.HandleFunc("/healthz", srv.HandleHealthz)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 
 	srv.httpsrv = &http.Server{

@@ -37,7 +37,9 @@ func (s *Server) HandleGetFeedSkeleton(w http.ResponseWriter, r *http.Request) {
 	// It's also a good idea to have this here incase you're getting spammed by non bluesky users - looking at you bots!
 	_, err := auth.GetRequestUserDID(r)
 	if err != nil {
-		slog.Error("validate user auth", "error", err)
+		// Unauthenticated probes (healthchecks, scanners, browsers) are
+		// expected — don't log them at ERROR level.
+		slog.Debug("unauthenticated feed skeleton request", "error", err, "host", r.RemoteAddr)
 		http.Error(w, "validate auth", http.StatusUnauthorized)
 		return
 	}
@@ -131,7 +133,7 @@ func (s *Server) HandleFeedInteractions(w http.ResponseWriter, r *http.Request) 
 	slog.Debug("handle feed interactions")
 	userDID, err := auth.GetRequestUserDID(r)
 	if err != nil {
-		slog.Error("validate user auth", "error", err)
+		slog.Debug("unauthenticated feed interactions request", "error", err, "host", r.RemoteAddr)
 		http.Error(w, "validate auth", http.StatusUnauthorized)
 		return
 	}
@@ -243,4 +245,9 @@ func (s *Server) getFeed(ctx context.Context, feed, cursor string, limit int) (F
 		resp.Cursor = fmt.Sprintf("%d", lastPost.CreatedAt)
 	}
 	return resp, nil
+}
+
+func (s *Server) HandleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok":true}`))
 }
